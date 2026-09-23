@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { getWeather } from "@/lib/weather";
 
 const SYSTEM_INSTRUCTION = `
 You are an expert multi-modal travel agent. Analyze the user's details and any uploaded images. Identify landmarks in the images using vision features.
@@ -36,6 +37,87 @@ You must return your response STRICTLY as a valid JSON object matching this sche
   ]
 }
 `;
+
+const schema = {
+  type: "object",
+  properties: {
+    tripOverview: {
+      type: "object",
+      properties: {
+        destination: { type: "string" },
+        totalBudgetUsed: { type: "number" },
+        vibe: { type: "string" }
+      },
+      required: [
+        "destination",
+        "totalBudgetUsed",
+        "vibe"
+      ]
+    },
+    budgetBreakdown: {
+      type: "object",
+      properties: {
+        transport: { type: "number" },
+        accommodation: { type: "number" },
+        food: { type: "number" },
+        activities: { type: "number" },
+        shopping: { type: "number" },
+        other: { type: "number" }
+      },
+      required: [
+        "transport",
+        "accommodation",
+        "food",
+        "activities",
+        "shopping",
+        "other"
+      ]
+    },
+    itinerary: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          day: { type: "number" },
+          activities: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                time: { type: "string" },
+                locationName: { type: "string" },
+                description: { type: "string" },
+                estimatedCost: { type: "number" }
+              },
+              required: [
+                "time",
+                "locationName",
+                "description",
+                "estimatedCost"
+              ]
+            }
+          }
+        },
+        required: [
+          "day",
+          "activities"
+        ]
+      }
+    },
+    packingChecklist: {
+      type: "array",
+      items: {
+        type: "string"
+      }
+    }
+  },
+  required: [
+    "tripOverview",
+    "budgetBreakdown",
+    "itinerary",
+    "packingChecklist"
+  ]
+};
 
 function cleanJsonResponse(text) {
   let cleaned = text.trim();
@@ -201,6 +283,8 @@ export async function POST(request) {
       );
     }
 
+    const weather = await getWeather(destination, startingLocation);
+
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY
     });
@@ -215,6 +299,15 @@ Travel interests: ${interests.length ? interests.join(", ") : "No specific inter
 Accommodation preference: ${accommodation}
 Transport preference: ${transport}
 Additional travel preferences: ${preferences || "No additional preferences provided."}
+
+Live destination weather data:
+${JSON.stringify(weather, null, 2)}
+
+Use the live weather data when planning the itinerary.
+Consider temperature, precipitation probability, weather conditions, and wind.
+Avoid scheduling weather-sensitive outdoor activities during periods with unfavorable weather when possible.
+Prefer suitable indoor or flexible activities when weather conditions are unfavorable.
+Do not invent weather information when live weather data is available.
 
 Create a practical day-by-day itinerary that fits the user's total group budget.
 
@@ -282,20 +375,49 @@ Keep the itinerary useful, varied, realistic, and easy to follow.
       });
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: [
-        {
-          role: "user",
-          parts
+    let response;
+    let lastError;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        response = await ai.models.generateContent({
+          model: "gemini-3.6-flash",
+          contents: [
+            {
+              role: "user",
+              parts
+            }
+          ],
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            temperature: 0.4,
+            responseMimeType: "application/json",
+            responseSchema: schema
+          }
+        });
+
+        break;
+      } catch (error) {
+        lastError = error;
+
+        const message = error?.message || "";
+        const isRetryable =
+          message.includes("503") ||
+          message.includes("UNAVAILABLE") ||
+          message.includes("429") ||
+          message.includes("RESOURCE_EXHAUSTED");
+
+        if (!isRetryable || attempt === 3) {
+          throw error;
         }
-      ],
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.4,
-        responseMimeType: "application/json"
+
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
-    });
+    }
+
+    if (!response) {
+      throw lastError || new Error("Failed to generate travel plan.");
+    }
 
     const responseText = response.text;
 
@@ -314,6 +436,7 @@ Keep the itinerary useful, varied, realistic, and easy to follow.
     );
 
     plan.tripOverview.totalBudgetUsed = budgetBreakdownTotal;
+    plan.weather = weather;
 
     return Response.json(plan, { status: 200 });
   } catch (error) {

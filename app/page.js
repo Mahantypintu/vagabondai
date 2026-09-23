@@ -87,6 +87,34 @@ function formatTime(value) {
   }).format(date);
 }
 
+function getWeatherDescription(code) {
+  const weatherCodes = {
+    0: "Clear sky",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Foggy",
+    48: "Rime fog",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    61: "Light rain",
+    63: "Moderate rain",
+    65: "Heavy rain",
+    71: "Light snow",
+    73: "Moderate snow",
+    75: "Heavy snow",
+    80: "Light rain showers",
+    81: "Moderate rain showers",
+    82: "Heavy rain showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with hail",
+    99: "Thunderstorm with heavy hail"
+  };
+
+  return weatherCodes[code] || "Variable conditions";
+}
+
 function SummaryRow({ label, value }) {
   return (
     <div className="flex items-center justify-between border-b border-white/10 py-4 last:border-0">
@@ -385,6 +413,101 @@ export default function Home() {
           </section>
 
           <aside className="space-y-6">
+            {plan.weather && (
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+                <p className="text-xs font-medium uppercase tracking-widest text-zinc-500">
+                  Destination weather
+                </p>
+
+                <div className="mt-4">
+                  <h2 className="text-2xl font-bold text-white">
+                    {plan.weather.location.name}
+                  </h2>
+
+                  <p className="mt-1 text-sm text-zinc-500">
+                    {plan.weather.location.country}
+                  </p>
+                </div>
+
+                {plan.weather.current && (
+                  <div className="mt-5 rounded-2xl bg-black/20 p-4">
+                    <p className="text-xs uppercase tracking-widest text-zinc-500">
+                      Current conditions
+                    </p>
+
+                    <div className="mt-3 flex items-end justify-between gap-4">
+                      <div>
+                        <span className="text-4xl font-bold text-white">
+                          {Math.round(plan.weather.current.temperature_2m)}°C
+                        </span>
+
+                        <p className="mt-1 text-sm text-zinc-400">
+                          Feels like{" "}
+                          {Math.round(plan.weather.current.apparent_temperature)}°C
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-emerald-400">
+                          {getWeatherDescription(plan.weather.current.weather_code)}
+                        </p>
+
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Wind {Math.round(plan.weather.current.wind_speed_10m)} km/h
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {plan.weather.daily && (
+                  <div className="mt-5">
+                    <p className="text-xs uppercase tracking-widest text-zinc-500">
+                      Forecast
+                    </p>
+
+                    <div className="mt-3 space-y-2">
+                      {plan.weather.daily.time
+                        .slice(0, duration)
+                        .map((date, index) => (
+                          <div
+                            key={date}
+                            className="flex items-center justify-between rounded-2xl bg-black/20 px-4 py-3"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-white">
+                                Day {index + 1}
+                              </p>
+
+                              <p className="mt-1 text-xs text-zinc-500">
+                                {getWeatherDescription(
+                                  plan.weather.daily.weather_code[index]
+                                )}
+                              </p>
+                            </div>
+
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-white">
+                                {Math.round(
+                                  plan.weather.daily.temperature_2m_max[index]
+                                )}° /{" "}
+                                {Math.round(
+                                  plan.weather.daily.temperature_2m_min[index]
+                                )}°
+                              </p>
+
+                              <p className="mt-1 text-xs text-zinc-500">
+                                Rain{" "}
+                                {plan.weather.daily.precipitation_probability_max[index]}%
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="rounded-3xl border border-emerald-400/20 bg-emerald-400/10 p-6">
               <p className="text-xs font-medium uppercase tracking-widest text-emerald-400">
                 Trip vibe
@@ -427,9 +550,8 @@ export default function Home() {
 
                 <SummaryRow
                   label="Travelers"
-                  value={`${travelers} ${
-                    Number(travelers) === 1 ? "traveler" : "travelers"
-                  }`}
+                  value={`${travelers} ${Number(travelers) === 1 ? "traveler" : "travelers"
+                    }`}
                 />
 
                 <SummaryRow
@@ -740,11 +862,10 @@ export default function Home() {
                         onClick={() =>
                           toggleInterest(interest.id)
                         }
-                        className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                          isSelected
+                        className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${isSelected
                             ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-300"
                             : "border-white/10 bg-black/20 text-zinc-400 hover:border-white/20 hover:bg-white/[0.03]"
-                        }`}
+                          }`}
                       >
                         {interest.label}
                       </button>
@@ -774,11 +895,10 @@ export default function Home() {
                         onClick={() =>
                           setAccommodation(option.id)
                         }
-                        className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                          isSelected
+                        className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${isSelected
                             ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-300"
                             : "border-white/10 bg-black/20 text-zinc-400 hover:border-white/20 hover:bg-white/[0.03]"
-                        }`}
+                          }`}
                       >
                         {option.label}
                       </button>
@@ -808,11 +928,10 @@ export default function Home() {
                         onClick={() =>
                           setTransport(option.id)
                         }
-                        className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                          isSelected
+                        className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${isSelected
                             ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-300"
                             : "border-white/10 bg-black/20 text-zinc-400 hover:border-white/20 hover:bg-white/[0.03]"
-                        }`}
+                          }`}
                       >
                         {option.label}
                       </button>
